@@ -37,29 +37,58 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
 ```
 
 ```{r}
-test_parameters <- list(c(1,0), c(1,1), c(1, 0.5), c(3, 0.5), c(3, 1), c(2, 0), c(0.5, 0))
+## Penalized regression model3
+preg_model <- linear_reg(penalty=tune(), mixture=tune()) %>% 
+  set_engine("glmnet") # Function to fit in R
 
-for (parameters in test_parameters) {
+preg_wf <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(preg_model)
 
-  penalized_regression_model <- linear_reg(penalty=parameters[1], mixture=parameters[2]) %>%
-    set_engine("glmnet")
-  
-  bike_workflow <- workflow() |>
-    add_recipe(my_recipe) |>
-    add_model(penalized_regression_model) |>
-    fit(data=train_data)
-  
-  linear_predictions <- predict(bike_workflow, new_data = test_data)
-  
-  ## Format the Predictions for Submission to Kaggle
-  kaggle_submission <- linear_predictions %>%
+grid_of_tuning_params <- grid_regular(penalty(), mixture(), levels = 4)
+
+folds <- vfold_cv(train_data, v = 5, repeats=1)
+```
+
+```{r}
+CV_results <- preg_wf %>%
+  tune_grid(resamples=folds,
+  grid=grid_of_tuning_params,
+  metrics=metric_set(rmse, mae))
+
+collect_metrics(CV_results) %>% # Gathers metrics into DF8
+  filter(.metric=="rmse") %>%
+  ggplot(data=., aes(x=penalty, y=mean, color=factor(mixture))) +
+  geom_line()
+
+bestTune <- CV_results %>%
+  select_best(metric="rmse")
+```
+
+```{r}
+final_wf <- preg_wf %>%
+  finalize_workflow(bestTune) %>%
+  fit(data=train_data)
+
+## Predict7
+tuned_predictions <- final_wf %>%
+  predict(new_data = test_data)
+```
+
+```{r}
+bestTune[1]
+```
+
+
+```{r}
+kaggle_submission <- tuned_predictions %>%
     mutate(.pred=exp(.pred)) %>%
     bind_cols(., test_data) %>% #Bind predictions with test data
     select(datetime, .pred) %>% #Just keep datetime and prediction variables
     rename(count=.pred) %>% #rename pred to count (for submission to Kaggle)
     mutate(count=pmax(0, count)) %>% #pointwise max of (0, prediction)
     mutate(datetime=as.character(format(datetime)))
-  
-  vroom_write(x=kaggle_submission, file=glue("./Penalized_Linear_Predictions_{glue_collapse(parameters, sep = '-')}.csv"), delim=",")
-}
+
+vroom_write(x=kaggle_submission, file=glue("./Tuned_Linear_Predictions_{glue_collapse(bestTune[1:2], sep = '-')}.csv"), delim=",")
 ```
+
