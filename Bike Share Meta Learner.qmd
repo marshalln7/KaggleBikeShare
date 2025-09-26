@@ -1,0 +1,73 @@
+---
+title: "Bike Share Workflow Quarto"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(vroom)
+library(glue)
+library(glmnet)
+library(rpart)
+library(ranger)
+library(bonsai)
+library(lightgbm)
+library(agua)
+
+h2o::h2o.init()
+```
+
+```{r}
+train_data <- vroom("train.csv") |>
+  select(-casual, -registered) |>
+  mutate(count = log(count))
+test_data <- vroom("test.csv")
+```
+
+```{r}
+my_recipe <- recipe(count ~ ., data=train_data) |>
+  step_mutate(weather=ifelse(weather == 4, 3L, weather)) |>
+  step_mutate(season = as.factor(season)) |>
+  step_time(datetime, features="hour") |>
+  step_date(datetime, features="dow") |>
+  step_rm(datetime) |>
+  step_dummy(all_nominal_predictors()) |>
+  step_normalize(all_numeric_predictors())
+  
+```
+
+```{r}
+## Define the model
+## max_runtime_secs = how long to let h2o.ai run
+## max_models = how many models to stack
+auto_model <- auto_ml() %>%
+  set_engine("h2o", max_runtime_secs=60, max_models=30) %>%
+  set_mode("regression")
+
+## Combine into Workflow
+automl_wf <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(auto_model) %>%
+  fit(data=train_data)
+```
+
+```{r}
+## Predict7
+tree_predictions <- automl_wf %>%
+  predict(new_data = test_data)
+
+```
+
+```{r}
+## Format the Predictions for Submission to Kaggle
+kaggle_submission <- tree_predictions %>%
+  mutate(.pred=exp(.pred)) %>%
+  bind_cols(., test_data) %>% #Bind predictions with test data
+  select(datetime, .pred) %>% #Just keep datetime and prediction variables
+  rename(count=.pred) %>% #rename pred to count (for submission to Kaggle)
+  mutate(count=pmax(0, count)) %>% #pointwise max of (0, prediction)
+  mutate(datetime=as.character(format(datetime)))
+
+vroom_write(x=kaggle_submission, file="./Meta_Learner_Predictions.csv", delim=",")
+```
