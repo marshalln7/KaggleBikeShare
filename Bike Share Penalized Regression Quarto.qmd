@@ -34,7 +34,18 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
 #prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
 #train_data <- bake(prepped_recipe, new_data=train_data)
 #str(train_data)
+
+#vroom_write(x=train_data, file=glue("./Baked_Dataset.csv"), delim=",")
 ```
+
+```{r}
+#prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
+#test_data <- bake(prepped_recipe, new_data=test_data)
+#str(test_data)
+
+#vroom_write(x=test_data, file=glue("./Baked_Dataset_Test.csv"), delim=",")
+```
+
 
 ```{r}
 test_parameters <- list(c(1,0), c(1,1), c(1, 0.5), c(3, 0.5), c(3, 1), c(2, 0), c(0.5, 0))

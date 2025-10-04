@@ -48,10 +48,11 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
 ```
 
 ```{r}
-boost_model <- boost_tree(tree_depth=tune(), trees=tune(), learn_rate=tune()) %>%
-  set_engine("lightgbm") %>% #or "xgboost" but lightgbm is faster
+bart_model <- bart(trees=tune()) %>% # BART figures out depth and learn_rate
+  set_engine("dbarts") %>% # might need to install
   set_mode("regression")
 ```
+
 
 ```{r}
 preg_wf <- workflow() %>%
@@ -97,5 +98,5 @@ kaggle_submission <- tree_predictions %>%
   mutate(count=pmax(0, count)) %>% #pointwise max of (0, prediction)
   mutate(datetime=as.character(format(datetime)))
 
-vroom_write(x=kaggle_submission, file="./Boosted_Predictions_1.csv", delim=",")
+vroom_write(x=kaggle_submission, file="./BART_Predictions_2.csv", delim=",")
 ```

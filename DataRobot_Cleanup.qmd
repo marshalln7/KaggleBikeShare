@@ -1,0 +1,33 @@
+---
+title: "DataRobot_Cleanup"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(vroom)
+library(glue)
+library(glmnet)
+```
+
+```{r}
+train_data <- vroom("train.csv") |>
+  select(-casual, -registered) |>
+  mutate(count = log(count))
+test_data <- vroom("test.csv")
+data_robot_predictions <- vroom("DataRobot_Predictions.csv")
+```
+
+```{r}
+data_robot_predictions <- data_robot_predictions |>
+  mutate(count_PREDICTION=exp(count_PREDICTION)) %>%
+  bind_cols(., test_data) %>% #Bind predictions with test data
+  select(datetime, count_PREDICTION) %>% #Just keep datetime and prediction variables
+  rename(count=count_PREDICTION) %>% #rename pred to count (for submission to Kaggle)
+  mutate(count=pmax(0, count)) %>% #pointwise max of (0, prediction)
+  mutate(datetime=as.character(format(datetime)))
+
+vroom_write(x=data_robot_predictions, file=glue("./Data_Robot_Predictions_Submission.csv"), delim=",")
+```
+

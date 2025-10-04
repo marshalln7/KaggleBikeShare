@@ -42,7 +42,7 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
 ## max_runtime_secs = how long to let h2o.ai run
 ## max_models = how many models to stack
 auto_model <- auto_ml() %>%
-  set_engine("h2o", max_runtime_secs=60, max_models=30) %>%
+  set_engine("h2o", max_runtime_secs=240, max_models=30) %>%
   set_mode("regression")
 
 ## Combine into Workflow
@@ -54,14 +54,14 @@ automl_wf <- workflow() %>%
 
 ```{r}
 ## Predict7
-tree_predictions <- automl_wf %>%
+metalearner_predictions <- automl_wf %>%
   predict(new_data = test_data)
 
 ```
 
 ```{r}
 ## Format the Predictions for Submission to Kaggle
-kaggle_submission <- tree_predictions %>%
+kaggle_submission <- metalearner_predictions %>%
   mutate(.pred=exp(.pred)) %>%
   bind_cols(., test_data) %>% #Bind predictions with test data
   select(datetime, .pred) %>% #Just keep datetime and prediction variables
