@@ -25,14 +25,29 @@ test_data <- vroom("test.csv")
 ```{r}
 my_recipe <- recipe(count ~ ., data=train_data) |>
   step_mutate(weather=ifelse(weather == 4, 3L, weather)) |>
-  step_mutate(season = as.factor(season)) |>
+  #step_mutate(season = as.factor(season)) |>
   step_time(datetime, features="hour") |>
-  step_date(datetime, features="dow") |>
-  step_mutate(dayness = -cos(2*pi*(datetime_hour-2)/24)) |>
+  step_date(datetime, features=c("dow", "month")) |>
+  step_mutate(datetime_dow_num = as.numeric(datetime_dow)) |>
+  step_mutate(hour_sin = sin(2 * pi * datetime_hour / 24), 
+              hour_cos = cos(2 * pi * datetime_hour / 24),
+              dow_sin = sin(2 * pi * datetime_dow_num / 7),
+              dow_cos = cos(2 * pi * datetime_dow_num / 7),
+              #doy_sin = sin(2 * pi * datetime_doy / 365),
+              #doy_cos = cos(2 * pi * datetime_doy / 365),
+              #temp_hour = temp * datetime_hour,
+              #weekend_hour = (1 - workingday) * datetime_hour,
+              #weather_temp = weather * temp,
+              #humidity_temp = humidity * temp,
+              #wind_temp = windspeed * (1 / (temp + 1)),
+              rush_hour = as.integer(datetime_hour %in% c(7, 8, 9, 17, 18, 19)),
+              morning_rush = as.integer(datetime_hour %in% c(7, 8, 9)),
+              evening_rush = as.integer(datetime_hour %in% c(17, 18, 19)),
+              business_hours = as.integer(datetime_hour >= 9 & datetime_hour < 17)) |>
+  step_rm(datetime_dow) |>
+  step_rm(datetime_dow_num) |>
   step_rm(datetime) |>
   step_dummy(all_nominal_predictors())
-  #step_normalize(all_numeric_predictors())
-  
 ```
 
 ```{r}
@@ -48,8 +63,20 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
 ```
 
 ```{r}
-boost_model <- boost_tree(tree_depth=tune(), trees=tune(), learn_rate=tune()) %>%
-  set_engine("lightgbm") %>% #or "xgboost" but lightgbm is faster
+# boost_model <- boost_tree(tree_depth=tune(), trees=tune(), learn_rate=tune()) %>%
+#   set_engine("lightgbm") %>% #or "xgboost" but lightgbm is faster
+#   set_mode("regression")
+
+boost_model <- boost_tree(
+  trees = tune(),           # number of trees
+  tree_depth = tune(),      # max depth of trees
+  min_n = tune(),           # minimum observations in node
+  loss_reduction = tune(),  # minimum loss reduction for split
+  sample_size = tune(),     # proportion of data for each tree
+  mtry = tune(),            # number of predictors randomly sampled
+  learn_rate = tune()       # learning rate (eta)
+) |>
+  set_engine("xgboost") |>
   set_mode("regression")
 ```
 
@@ -58,7 +85,7 @@ preg_wf <- workflow() %>%
   add_recipe(my_recipe) %>%
   add_model(bart_model)
 
-grid_of_tuning_params <- grid_regular(trees(), levels = 5)
+grid_of_tuning_params <- grid_regular(trees(), tree_depth(), min_n(), loss_reduction(), sample_size(), mtry(), learn_rate(), levels = 5)
 
 folds <- vfold_cv(train_data, v = 5, repeats=1)
 ```

@@ -25,21 +25,37 @@ test_data <- vroom("test.csv")
 ```{r}
 my_recipe <- recipe(count ~ ., data=train_data) |>
   step_mutate(weather=ifelse(weather == 4, 3L, weather)) |>
-  step_mutate(season = as.factor(season)) |>
+  #step_mutate(season = as.factor(season)) |>
   step_time(datetime, features="hour") |>
-  step_date(datetime, features="dow") |>
-  step_mutate(dayness = -cos(2*pi*(datetime_hour-2)/24)) |>
+  step_date(datetime, features=c("dow", "month")) |>
+  step_mutate(datetime_dow_num = as.numeric(datetime_dow)) |>
+  step_mutate(hour_sin = sin(2 * pi * datetime_hour / 24), 
+              hour_cos = cos(2 * pi * datetime_hour / 24),
+              dow_sin = sin(2 * pi * datetime_dow_num / 7),
+              dow_cos = cos(2 * pi * datetime_dow_num / 7),
+              #doy_sin = sin(2 * pi * datetime_doy / 365),
+              #doy_cos = cos(2 * pi * datetime_doy / 365),
+              #temp_hour = temp * datetime_hour,
+              #weekend_hour = (1 - workingday) * datetime_hour,
+              #weather_temp = weather * temp,
+              #humidity_temp = humidity * temp,
+              #wind_temp = windspeed * (1 / (temp + 1)),
+              rush_hour = as.integer(datetime_hour %in% c(7, 8, 9, 17, 18, 19)),
+              morning_rush = as.integer(datetime_hour %in% c(7, 8, 9)),
+              evening_rush = as.integer(datetime_hour %in% c(17, 18, 19)),
+              business_hours = as.integer(datetime_hour >= 9 & datetime_hour < 17)) |>
+  step_rm(datetime_dow) |>
+  step_rm(datetime_dow_num) |>
   step_rm(datetime) |>
   step_dummy(all_nominal_predictors())
-  #step_normalize(all_numeric_predictors())
   
 ```
 
 ```{r}
-#prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
-#train_data <- bake(prepped_recipe, new_data=train_data)
-
-#vroom_write(x=train_data, file=glue("./Baked_Dataset.csv"), delim=",")
+# prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
+# train_data <- bake(prepped_recipe, new_data=train_data)
+# 
+# vroom_write(x=train_data, file=glue("./Baked_Dataset.csv"), delim=",")
 
 #prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
 #test_data <- bake(prepped_recipe, new_data=test_data)
@@ -48,14 +64,14 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
 ```
 
 ```{r}
-bart_model <- bart(trees=tune()) %>% # BART figures out depth and learn_rate
+bart_model <- bart(trees=1500) %>% # BART figures out depth and learn_rate
   set_engine("dbarts") %>% # might need to install
   set_mode("regression")
 ```
 
 
 ```{r}
-preg_wf <- workflow() %>%
+initial_wf <- workflow() %>%
   add_recipe(my_recipe) %>%
   add_model(bart_model)
 
@@ -65,25 +81,26 @@ folds <- vfold_cv(train_data, v = 5, repeats=1)
 ```
 
 ```{r}
-CV_results <- preg_wf %>%
-  tune_grid(resamples=folds,
-  grid=grid_of_tuning_params,
-  metrics=metric_set(rmse, mae))
+# CV_results <- initial_wf %>%
+#   tune_grid(resamples=folds,
+#   grid=grid_of_tuning_params,
+#   metrics=metric_set(rmse))
 
 ```
 
 ```{r}
-bestTune <- CV_results %>%
-  select_best(metric="rmse")
+# bestTune <- CV_results %>%
+#   select_best(metric="rmse")
 ```
 
 ```{r}
-final_wf <- preg_wf %>%
-  finalize_workflow(bestTune) %>%
-  fit(data=train_data)
+# final_wf <- initial_wf %>%
+#   finalize_workflow(bestTune) %>%
+#   fit(data=train_data)
 
 ## Predict7
-tree_predictions <- final_wf %>%
+tree_predictions <- initial_wf |>
+  fit(data=train_data) |>
   predict(new_data = test_data)
 
 ```
@@ -98,5 +115,5 @@ kaggle_submission <- tree_predictions %>%
   mutate(count=pmax(0, count)) %>% #pointwise max of (0, prediction)
   mutate(datetime=as.character(format(datetime)))
 
-vroom_write(x=kaggle_submission, file="./BART_Predictions_2.csv", delim=",")
+vroom_write(x=kaggle_submission, file="./BART_Predictions_8.csv", delim=",")
 ```
