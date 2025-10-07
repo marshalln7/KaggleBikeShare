@@ -42,7 +42,7 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
 ## max_runtime_secs = how long to let h2o.ai run
 ## max_models = how many models to stack
 auto_model <- auto_ml() %>%
-  set_engine("h2o", max_runtime_secs=240, max_models=30) %>%
+  set_engine("h2o", max_runtime_secs=2400, max_models=300) %>%
   set_mode("regression")
 
 ## Combine into Workflow
@@ -69,5 +69,5 @@ kaggle_submission <- metalearner_predictions %>%
   mutate(count=pmax(0, count)) %>% #pointwise max of (0, prediction)
   mutate(datetime=as.character(format(datetime)))
 
-vroom_write(x=kaggle_submission, file="./Meta_Learner_Predictions.csv", delim=",")
+vroom_write(x=kaggle_submission, file="./Meta_Learner_Predictions_2.csv", delim=",")
 ```

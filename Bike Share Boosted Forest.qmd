@@ -83,9 +83,18 @@ boost_model <- boost_tree(
 ```{r}
 preg_wf <- workflow() %>%
   add_recipe(my_recipe) %>%
-  add_model(bart_model)
+  add_model(boost_model)
 
-grid_of_tuning_params <- grid_regular(trees(), tree_depth(), min_n(), loss_reduction(), sample_size(), mtry(), learn_rate(), levels = 5)
+grid_of_tuning_params <- grid_space_filling(
+  trees(), 
+  tree_depth(), 
+  min_n(), 
+  loss_reduction(), 
+  sample_prop(),  
+  finalize(mtry(), train_data),  
+  learn_rate(), 
+  size = 30  # Only 30 combinations instead of 78k!
+)
 
 folds <- vfold_cv(train_data, v = 5, repeats=1)
 ```
@@ -124,5 +133,5 @@ kaggle_submission <- tree_predictions %>%
   mutate(count=pmax(0, count)) %>% #pointwise max of (0, prediction)
   mutate(datetime=as.character(format(datetime)))
 
-vroom_write(x=kaggle_submission, file="./Boosted_Predictions_1.csv", delim=",")
+vroom_write(x=kaggle_submission, file="./XGBoosted_Predictions_1.csv", delim=",")
 ```

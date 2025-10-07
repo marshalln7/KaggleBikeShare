@@ -29,10 +29,10 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
   step_time(datetime, features="hour") |>
   step_date(datetime, features=c("dow", "month")) |>
   step_mutate(datetime_dow_num = as.numeric(datetime_dow)) |>
-  step_mutate(hour_sin = sin(2 * pi * datetime_hour / 24), 
-              hour_cos = cos(2 * pi * datetime_hour / 24),
-              dow_sin = sin(2 * pi * datetime_dow_num / 7),
-              dow_cos = cos(2 * pi * datetime_dow_num / 7),
+  step_mutate(#hour_sin = sin(2 * pi * datetime_hour / 24), 
+              #hour_cos = cos(2 * pi * datetime_hour / 24),
+              #dow_sin = sin(2 * pi * datetime_dow_num / 7),
+              #dow_cos = cos(2 * pi * datetime_dow_num / 7),
               #doy_sin = sin(2 * pi * datetime_doy / 365),
               #doy_cos = cos(2 * pi * datetime_doy / 365),
               #temp_hour = temp * datetime_hour,
@@ -40,10 +40,14 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
               #weather_temp = weather * temp,
               #humidity_temp = humidity * temp,
               #wind_temp = windspeed * (1 / (temp + 1)),
+              weather_lag1 = lag(weather, n=1, default = "1"),
               rush_hour = as.integer(datetime_hour %in% c(7, 8, 9, 17, 18, 19)),
               morning_rush = as.integer(datetime_hour %in% c(7, 8, 9)),
               evening_rush = as.integer(datetime_hour %in% c(17, 18, 19)),
-              business_hours = as.integer(datetime_hour >= 9 & datetime_hour < 17)) |>
+              business_hours = as.integer(datetime_hour >= 9 & datetime_hour < 17),
+              working_holiday_hour = factor(24 * as.numeric(holiday) +
+                                              48 * as.numeric(workingday) +
+                                              as.numeric(datetime_hour))) |>
   step_rm(datetime_dow) |>
   step_rm(datetime_dow_num) |>
   step_rm(datetime) |>
@@ -52,10 +56,10 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
 ```
 
 ```{r}
-# prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
-# train_data <- bake(prepped_recipe, new_data=train_data)
+#prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
+#train_data <- bake(prepped_recipe, new_data=train_data)
 # 
-# vroom_write(x=train_data, file=glue("./Baked_Dataset.csv"), delim=",")
+#vroom_write(x=train_data, file=glue("./Baked_Dataset.csv"), delim=",")
 
 #prepped_recipe <- prep(my_recipe) # Sets up the preprocessing using myDataSet
 #test_data <- bake(prepped_recipe, new_data=test_data)
@@ -115,5 +119,5 @@ kaggle_submission <- tree_predictions %>%
   mutate(count=pmax(0, count)) %>% #pointwise max of (0, prediction)
   mutate(datetime=as.character(format(datetime)))
 
-vroom_write(x=kaggle_submission, file="./BART_Predictions_8.csv", delim=",")
+vroom_write(x=kaggle_submission, file="./BART_Predictions_10.csv", delim=",")
 ```
