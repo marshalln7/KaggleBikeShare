@@ -25,6 +25,8 @@ test_data <- vroom("test.csv")
 ```{r}
 my_recipe <- recipe(count ~ ., data=train_data) |>
   step_mutate(weather=ifelse(weather == 4, 3L, weather)) |>
+  #step_lag(weather, lag = 1) |>
+  #step_naomit(weather_lag_1) |>
   #step_mutate(season = as.factor(season)) |>
   step_time(datetime, features="hour") |>
   step_date(datetime, features=c("dow", "month")) |>
@@ -40,7 +42,6 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
               #weather_temp = weather * temp,
               #humidity_temp = humidity * temp,
               #wind_temp = windspeed * (1 / (temp + 1)),
-              weather_lag1 = lag(weather, n=1, default = "1"),
               rush_hour = as.integer(datetime_hour %in% c(7, 8, 9, 17, 18, 19)),
               morning_rush = as.integer(datetime_hour %in% c(7, 8, 9)),
               evening_rush = as.integer(datetime_hour %in% c(17, 18, 19)),
@@ -52,6 +53,20 @@ my_recipe <- recipe(count ~ ., data=train_data) |>
   step_rm(datetime_dow_num) |>
   step_rm(datetime) |>
   step_dummy(all_nominal_predictors())
+
+my_recipe <- recipe(count ~ ., data=train_data) |>
+  step_mutate(weather=ifelse(weather == 4, 3L, weather),
+              weekend = ifelse(wday(datetime) %in% c(1,7), 1, 0),
+              rush_hour = ifelse(hour(datetime) %in% c(7:9, 16:19), 1, 0)) |>
+  step_date(datetime, features=c("dow", "year", "month")) |>
+  step_time(datetime, features="hour") |>
+  step_rm(datetime) |>
+  step_interact(terms = ~ temp:humidity + temp:windspeed + season:humidity) |>
+  step_poly(temp, humidity, degree = 2) |>
+  step_dummy(all_nominal_predictors()) |>
+  step_normalize(all_numeric_predictors())
+  
+  
   
 ```
 
@@ -111,6 +126,8 @@ tree_predictions <- initial_wf |>
 
 ```{r}
 ## Format the Predictions for Submission to Kaggle
+#test_data_trimmed <- test_data[-1, ]
+
 kaggle_submission <- tree_predictions %>%
   mutate(.pred=exp(.pred)) %>%
   bind_cols(., test_data) %>% #Bind predictions with test data
@@ -119,5 +136,5 @@ kaggle_submission <- tree_predictions %>%
   mutate(count=pmax(0, count)) %>% #pointwise max of (0, prediction)
   mutate(datetime=as.character(format(datetime)))
 
-vroom_write(x=kaggle_submission, file="./BART_Predictions_10.csv", delim=",")
+vroom_write(x=kaggle_submission, file="./BART_Predictions_12.csv", delim=",")
 ```
